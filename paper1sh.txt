@@ -1,0 +1,103 @@
+#! /bin/bash -l
+
+#SBATCH --partition=angsd_class
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --job-name=is_conda
+#SBATCH --time=10:00:00
+#SBATCH --mem=40G
+#SBATCH --error slurm-%j.err
+#SBATCH --cpus-per-task=1
+
+accession_numbers=(SRR25236333 SRR25236334 SRR25236336 SRR25236337 SRR25236338 SRR25236339)
+
+for accession_number in "${accession_numbers[@]}"; do
+    fastq-dump --split-files --gzip "$accession_number"
+done
+
+#***************************************************************************************************************************************
+# FILES ARE MANUALLY RENAMED AFTER DOWNLOAD AND THE STEPS OF CREATING NEW DIRECTORIES AND RE-DIRECTING TO THESE DIRECTORIES ARE OMITTED.
+#***************************************************************************************************************************************
+
+source ~/.bashrc
+mamba activate angsd
+
+for file in CRISPR*.fq.gz; do
+        fastqc "$file" --extract -o fastqcResults/
+done
+
+mamba activate trim-galore
+
+pairs=(
+	"CRISPR_CTRL_1_1.fastq.gz" "CRISPR_CTRL_1_2.fastq.gz"
+	"CRISPR_CTRL_2_1.fastq.gz" "CRISPR_CTRL_2_2.fastq.gz"
+	"CRISPR_CTRL_3_1.fastq.gz" "CRISPR_CTRL_3_2.fastq.gz"
+	"CRISPR_KD_1_1.fastq.gz" "CRISPR_KD_1_2.fastq.gz"
+	"CRISPR_KD_2_1.fastq.gz" "CRISPR_KD_2_2.fastq.gz"
+	"CRISPR_KD_3_1.fastq.gz" "CRISPR_KD_3_2.fastq.gz"
+)
+
+for ((i = 0; i < ${#pairs[@]}; i+=2)); do
+	file1="${pairs[i]}"
+	file2="${pairs[i + 1]}"
+	trim_galore --illumina --length 2 --output_dir trimResults --paired "$file1" "$file2"
+done
+
+
+mamba activate angsd
+
+for ((i=1; i<=3; i++)); do
+        STAR --runMode alignReads \
+        --runThreadN 4 \
+        --genomeDir /athena/angsd/scratch/wes4004/finalProj/hg38_100 \
+        --readFilesIn /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/"CRISPR_CTRL_${i}_1_val_1.fq.gz" "CRISPR_CTRL_${i}_2_val_2.fq.gz" \
+        --readFilesCommand zcat \
+        --outFileNamePrefix /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/"CRISPR_CTRL_${i}." \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFilterMultimapNmax 1 \
+        --alignIntronMin 1 \
+        --alignIntronMax 1200000 \
+        --outSAMattributes NH HI AS nM MD
+done
+
+for ((i=1; i<=3; i++)); do
+        STAR --runMode alignReads \
+        --runThreadN 4 \
+        --genomeDir /athena/angsd/scratch/wes4004/finalProj/hg38_100 \
+        --readFilesIn /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/"CRISPR_KD_${i}_1_val_1.fq.gz" "CRISPR_KD_${i}_2_val_2.fq.gz" \
+        --readFilesCommand zcat \
+        --outFileNamePrefix /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/"CRISPR_KD_${i}." \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFilterMultimapNmax 1 \
+        --alignIntronMin 1 \
+        --alignIntronMax 1200000 \
+        --outSAMattributes NH HI AS nM MD
+done
+
+for file in *.bam; do
+        samtools index "$file"
+done
+
+mamba activate rseqc
+
+i=1
+for file in *.bam; do
+        geneBody_coverage.py -i "$file" -r /athena/angsd/scratch/wes4004/finalProj/hg38.bed -o /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/rseqcResults/CRISPR_"$i"
+        ((i++))
+done
+
+
+mamba activate angsd
+
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p -f -O *.bam
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p *.bam
+
+
+
+mamba activate rseqc
+
+i=1
+for file in /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/*.bam; do
+        read_distribution.py -i "$file" -r /athena/angsd/scratch/wes4004/finalProj/hg38.bed > CRISPR_"$i"
+	((i++))
+done
