@@ -1,0 +1,332 @@
+---
+title: "Milestone"
+author: "Wenyi Shao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a modification made to set better parameters for STAR.
+```{bash intron, eval = FALSE}
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
+# then created bed file and upload from local
+scp /root/angsd/finalProject/hg38.bed cayuga:/athena/angsd/scratch/wes4004/finalProj
+hg38.bed
+awk '{print $3 - $2} ' hg38.bed | sort -n | uniq | head -n 3
+awk '{print $3 - $2} ' hg38.bed | sort -rn | uniq | head -n 3
+```
+output for the smallest intron:
+```
+1
+2
+10
+```
+output for largest intron:
+```
+1160411
+1097903
+1068357
+```
+
+```{bash featureCounts, eval=FALSE}
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p -f -O *.bam
+
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p *.bam
+```
+
+```{r library, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+```{r files}
+paper1_exons <- read.table("C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/paper1_exons.txt.summary", header = TRUE)
+paper1_genes <- read.table("C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/paper1_genes.txt.summary", header = TRUE)
+paper2_exons <- read.table("C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/paper2_exons.txt.summary", header = TRUE)
+paper2_genes <- read.table("C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/paper2_genes.txt.summary", header = TRUE)
+```
+
+```{r paper1}
+orig_names_1 <- names(paper1_exons)
+
+names(paper1_exons) <- c(names(paper1_exons)[1], "CRISPR_CTRL_1", "CRISPR_CTRL_2", "CRISPR_CTRL_3", "CRISPR_KD_1", "CRISPR_KD_2", "CRISPR_KD_3")
+df_long_1 <- gather(paper1_exons, key = "Sample", value = "Value", -Status)
+df_long_mod_1 <- df_long_1 %>% filter(Status %in% c("Assigned", "Unassigned_NoFeatures", "Unassigned_Ambiguity"))
+df_long_mod_1$filter <- "exons"
+
+names(paper1_genes) <- c(names(paper1_genes)[1], "CRISPR_CTRL_1", "CRISPR_CTRL_2", "CRISPR_CTRL_3", "CRISPR_KD_1", "CRISPR_KD_2", "CRISPR_KD_3")
+df_long_gene_1 <- gather(paper1_genes, key = "Sample", value = "Value", -Status)
+df_long_mod_gene_1 <- df_long_gene_1 %>% filter(Status %in% c("Assigned", "Unassigned_NoFeatures", "Unassigned_Ambiguity"))
+df_long_mod_gene_1$filter <- "genes"
+
+paper1 <- rbind(df_long_mod_1, df_long_mod_gene_1)
+
+plot1 <- ggplot(paper1, aes(x = Sample, y = Value, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::scientific) +
+  coord_flip() +
+  labs(x = "Samples", y = "# Reads", title = "Exon Counts from FeatureCounts") +
+   facet_grid(filter ~ .)
+plot1
+
+```
+
+
+```{r paper2}
+orig_names_2 <- names(paper2_exons)
+
+names(paper2_exons) <- c(names(paper2_exons)[1], "siRNA_CTRL_1", "siRNA_CTRL_2", "siRNA_KD1_1", "siRNA_KD1_2", "siRNA_KD2_1", "siRNA_KD2_2")
+df_long_2 <- gather(paper2_exons, key = "Sample", value = "Value", -Status)
+df_long_mod_2 <- df_long_2 %>% filter(Status %in% c("Assigned", "Unassigned_NoFeatures", "Unassigned_Ambiguity"))
+df_long_mod_2$filter <- "exons"
+
+names(paper2_genes) <- c(names(paper2_genes)[1], "siRNA_CTRL_1", "siRNA_CTRL_2", "siRNA_KD1_1", "siRNA_KD1_2", "siRNA_KD2_1", "siRNA_KD2_2")
+df_long_gene_2 <- gather(paper2_genes, key = "Sample", value = "Value", -Status)
+df_long_mod_gene_2 <- df_long_gene_2 %>% filter(Status %in% c("Assigned", "Unassigned_NoFeatures", "Unassigned_Ambiguity"))
+df_long_mod_gene_2$filter <- "genes"
+
+paper2 <- rbind(df_long_mod_2, df_long_mod_gene_2)
+
+plot2 <- ggplot(paper2, aes(x = Sample, y = Value, fill = Status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_y_continuous(labels = scales::scientific) +
+  coord_flip() +
+  labs(x = "Samples", y = "# Reads", title = "Exon Counts from FeatureCounts") +
+   facet_grid(filter ~ .)
+plot2
+```
+After running rseqc:  
+CRISPR_CTRL_1
+```
+Total Reads                   53010545
+Total Tags                    74116270
+Total Assigned Tags           70457395
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            54947231            1349.61           
+5'UTR_Exons         51591719            1537111             29.79             
+3'UTR_Exons         84703449            12300996            145.22            
+Introns             1692863637          1431855             0.85              
+TSS_up_1kb          32768518            12603               0.38              
+TSS_up_5kb          145105345           28299               0.20              
+TSS_up_10kb         257034069           135114              0.53              
+TES_down_1kb        35580148            36710               1.03              
+TES_down_5kb        152451362           83378               0.55              
+TES_down_10kb       264842866           105088              0.40              
+=====================================================================
+```
+CRISPR_CTRL_2
+```
+Total Reads                   54444657
+Total Tags                    75704188
+Total Assigned Tags           71939678
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            55506437            1363.35           
+5'UTR_Exons         51591719            1635196             31.69             
+3'UTR_Exons         84703449            12631353            149.12            
+Introns             1692863637          1947252             1.15              
+TSS_up_1kb          32768518            13746               0.42              
+TSS_up_5kb          145105345           30486               0.21              
+TSS_up_10kb         257034069           102688              0.40              
+TES_down_1kb        35580148            40729               1.14              
+TES_down_5kb        152451362           93850               0.62              
+TES_down_10kb       264842866           116752              0.44              
+=====================================================================
+```
+CRISPR_CTRL_3
+```
+Total Reads                   45824496
+Total Tags                    63720576
+Total Assigned Tags           60150294
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            45943802            1128.47           
+5'UTR_Exons         51591719            1321868             25.62             
+3'UTR_Exons         84703449            11548234            136.34            
+Introns             1692863637          1183081             0.70              
+TSS_up_1kb          32768518            10877               0.33              
+TSS_up_5kb          145105345           21764               0.15              
+TSS_up_10kb         257034069           52496               0.20              
+TES_down_1kb        35580148            35850               1.01              
+TES_down_5kb        152451362           82207               0.54              
+TES_down_10kb       264842866           100813              0.38              
+=====================================================================
+```
+CRISPR_KD_1
+```
+Total Reads                   59178839
+Total Tags                    80880021
+Total Assigned Tags           76795808
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            58152196            1428.33           
+5'UTR_Exons         51591719            1730411             33.54             
+3'UTR_Exons         84703449            14804348            174.78            
+Introns             1692863637          1910394             1.13              
+TSS_up_1kb          32768518            11933               0.36              
+TSS_up_5kb          145105345           24986               0.17              
+TSS_up_10kb         257034069           73104               0.28              
+TES_down_1kb        35580148            44584               1.25              
+TES_down_5kb        152451362           102061              0.67              
+TES_down_10kb       264842866           125355              0.47              
+=====================================================================
+```
+CRISPR_KD_2
+```
+Total Reads                   34273622
+Total Tags                    47880870
+Total Assigned Tags           45593330
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            35615293            874.78            
+5'UTR_Exons         51591719            1103834             21.40             
+3'UTR_Exons         84703449            7553030             89.17             
+Introns             1692863637          1185644             0.70              
+TSS_up_1kb          32768518            10532               0.32              
+TSS_up_5kb          145105345           21703               0.15              
+TSS_up_10kb         257034069           55367               0.22              
+TES_down_1kb        35580148            26901               0.76              
+TES_down_5kb        152451362           64705               0.42              
+TES_down_10kb       264842866           80162               0.30              
+=====================================================================
+```
+CRISPR_KD_3
+```
+Total Reads                   48327831
+Total Tags                    66492501
+Total Assigned Tags           63197510
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            48557522            1192.67           
+5'UTR_Exons         51591719            1490024             28.88             
+3'UTR_Exons         84703449            11149707            131.63            
+Introns             1692863637          1845084             1.09              
+TSS_up_1kb          32768518            9894                0.30              
+TSS_up_5kb          145105345           21631               0.15              
+TSS_up_10kb         257034069           44042               0.17              
+TES_down_1kb        35580148            37439               1.05              
+TES_down_5kb        152451362           89851               0.59              
+TES_down_10kb       264842866           111131              0.42              
+=====================================================================
+
+```
+
+siRNA_CTRL_1:
+```
+Total Reads                   44653464
+Total Tags                    72006649
+Total Assigned Tags           68270106
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            53546725            1315.21           
+5'UTR_Exons         51591719            2360050             45.74             
+3'UTR_Exons         84703449            11271702            133.07            
+Introns             1692863637          960899              0.57              
+TSS_up_1kb          32768518            18377               0.56              
+TSS_up_5kb          145105345           30496               0.21              
+TSS_up_10kb         257034069           41374               0.16              
+TES_down_1kb        35580148            30007               0.84              
+TES_down_5kb        152451362           71420               0.47              
+TES_down_10kb       264842866           89356               0.34              
+=====================================================================
+```
+siRNA_CTRL_2
+```
+Total Reads                   53475983
+Total Tags                    87012521
+Total Assigned Tags           82491966
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            65672033            1613.03           
+5'UTR_Exons         51591719            2626197             50.90             
+3'UTR_Exons         84703449            12746359            150.48            
+Introns             1692863637          1305263             0.77              
+TSS_up_1kb          32768518            18393               0.56              
+TSS_up_5kb          145105345           31020               0.21              
+TSS_up_10kb         257034069           41237               0.16              
+TES_down_1kb        35580148            33930               0.95              
+TES_down_5kb        152451362           78150               0.51              
+TES_down_10kb       264842866           100877              0.38              
+=====================================================================
+```
+siRNA_KD1_1
+```
+Total Reads                   54369182
+Total Tags                    90744985
+Total Assigned Tags           86317762
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            70188989            1723.98           
+5'UTR_Exons         51591719            2984114             57.84             
+3'UTR_Exons         84703449            12264404            144.79            
+Introns             1692863637          772798              0.46              
+TSS_up_1kb          32768518            17117               0.52              
+TSS_up_5kb          145105345           24908               0.17              
+TSS_up_10kb         257034069           30286               0.12              
+TES_down_1kb        35580148            29221               0.82              
+TES_down_5kb        152451362           62176               0.41              
+TES_down_10kb       264842866           77171               0.29              
+=====================================================================
+```
+siRNA_KD1_2
+```
+Total Reads                   43475579
+Total Tags                    72421538
+Total Assigned Tags           68813934
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            55903613            1373.10           
+5'UTR_Exons         51591719            2245871             43.53             
+3'UTR_Exons         84703449            9630101             113.69            
+Introns             1692863637          940060              0.56              
+TSS_up_1kb          32768518            13362               0.41              
+TSS_up_5kb          145105345           21405               0.15              
+TSS_up_10kb         257034069           28157               0.11              
+TES_down_1kb        35580148            24190               0.68              
+TES_down_5kb        152451362           52576               0.34              
+TES_down_10kb       264842866           66132               0.25              
+=====================================================================
+```
+siRNA_KD2_1
+```
+Total Reads                   43164946
+Total Tags                    72349078
+Total Assigned Tags           68906585
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            56141081            1378.93           
+5'UTR_Exons         51591719            2537566             49.19             
+3'UTR_Exons         84703449            9312201             109.94            
+Introns             1692863637          807185              0.48              
+TSS_up_1kb          32768518            19173               0.59              
+TSS_up_5kb          145105345           30443               0.21              
+TSS_up_10kb         257034069           41858               0.16              
+TES_down_1kb        35580148            24295               0.68              
+TES_down_5kb        152451362           52399               0.34              
+TES_down_10kb       264842866           66694               0.25              
+=====================================================================
+```
+siRNA_KD2_2
+```
+Total Reads                   69672395
+Total Tags                    116889602
+Total Assigned Tags           110586194
+=====================================================================
+Group               Total_bases         Tag_count           Tags/Kb             
+CDS_Exons           40713380            91379159            2244.45           
+5'UTR_Exons         51591719            2995192             58.06             
+3'UTR_Exons         84703449            15186564            179.29            
+Introns             1692863637          876185              0.52              
+TSS_up_1kb          32768518            19055               0.58              
+TSS_up_5kb          145105345           32183               0.22              
+TSS_up_10kb         257034069           49114               0.19              
+TES_down_1kb        35580148            40328               1.13              
+TES_down_5kb        152451362           76278               0.50              
+TES_down_10kb       264842866           99980               0.38              
+=====================================================================
+```
