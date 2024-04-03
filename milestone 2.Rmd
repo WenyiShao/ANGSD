@@ -9,7 +9,68 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-This is a modification made to set better parameters for STAR.
+## Background
+I picked these two papers because they both use human breast cancer cell line MCF10-A. The goal is to compare whether the knockdown method for METTL3 will affect gene expression.
+
+
+|   |   |
+|---|---|
+| Paper 1  | Paper2  |
+|  CRISPR |  siRNA |
+| Ribodepletion  |  poly-A |
+| Read length 101  | Read length 150  |
+|  Paired end | Paired end  |
+| Stranded  |  Unstranded |
+| 3 controls + 3 KD  |  2 controls + 4 KD (2 different siRNA) |
+
+## Data Download & Preprocessing
+
+### Reference genome and data download:
+```{bash download, eval=FALSE}
+# reference genome
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
+wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.fa.gz
+# data for paper1 (CRISPR METTL3 knockdown)
+accession_numbers=(SRR25236333 SRR25236334 SRR25236336 SRR25236337 SRR25236338 SRR25236339)
+
+for accession_number in "${accession_numbers[@]}"; do
+    fastq-dump --split-files --gzip "$accession_number"
+done
+# data for paper2 (siRNA METTL3 knockdown)
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/000/ERR9627500/ERR9627500_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/000/ERR9627500/ERR9627500_2.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/001/ERR9627501/ERR9627501_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/001/ERR9627501/ERR9627501_2.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/008/ERR9627488/ERR9627488_2.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/008/ERR9627488/ERR9627488_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/009/ERR9627489/ERR9627489_2.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/009/ERR9627489/ERR9627489_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/004/ERR9627494/ERR9627494_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/004/ERR9627494/ERR9627494_2.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/005/ERR9627495/ERR9627495_1.fastq.gz
+wget -nc ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR962/005/ERR9627495/ERR9627495_2.fastq.gz
+```
+**The names of the files are then manually changed. Steps of making new directories and re-directing to these directories are omitted.**
+
+### Run fastQC on raw reads.
+```{bash preQC, eval=FALSE}
+for file in *.fastq.gz; do
+        fastqc "$file" --extract -o fastqcResults/
+done
+```
+
+### Generate STAR index for both papers
+```{bash gen_index, eval=FALSE}
+gunzip hg38.fa.gz
+gunzip hg38.knownGene.gtf.gz
+# paper1 has read length of 101
+STAR --runMode genomeGenerate --runThreadN 1 --genomeDir hg38_STARindex/ --genomeFastaFiles hg38.fa --sjdbGTFfile hg38.knownGene.gtf --sjdbOverhang 99
+# paper2 has read length of 150
+STAR --runMode genomeGenerate --runThreadN 4 --genomeDir hg38_150/ --genomeFastaFiles hg38.fa --sjdbGTFfile hg38.ncbiRefSeq.gtf --sjdbOverhang 149 
+```
+
+### STAR alignment
+To find min and max intron size:
 ```{bash intron, eval = FALSE}
 wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
 # then created bed file and upload from local
@@ -31,12 +92,87 @@ output for largest intron:
 1068357
 ```
 
-```{bash featureCounts, eval=FALSE}
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p -f -O *.bam
+### Run STAR
+```{bash runSTAR, eval=FALSE}
+# Paper 1
+for ((i=1; i<=3; i++)); do
+        STAR --runMode alignReads \
+        --runThreadN 4 \
+        --genomeDir /athena/angsd/scratch/wes4004/finalProj/hg38_100 \
+        --readFilesIn /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/"CRISPR_CTRL_${i}_1_val_1.fq.gz" "CRISPR_CTRL_${i}_2_val_2.fq.gz" \
+        --readFilesCommand zcat \
+        --outFileNamePrefix /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/"CRISPR_CTRL_${i}." \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFilterMultimapNmax 1 \
+        --alignIntronMin 1 \
+        --alignIntronMax 1200000 \
+        --outSAMattributes NH HI AS nM MD
+done
 
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p *.bam
+for ((i=1; i<=3; i++)); do
+        STAR --runMode alignReads \
+        --runThreadN 4 \
+        --genomeDir /athena/angsd/scratch/wes4004/finalProj/hg38_100 \
+        --readFilesIn /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/"CRISPR_KD_${i}_1_val_1.fq.gz" "CRISPR_KD_${i}_2_val_2.fq.gz" \
+        --readFilesCommand zcat \
+        --outFileNamePrefix /athena/angsd/scratch/wes4004/finalProj/paper1/trimResults/STARalign/"CRISPR_KD_${i}." \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFilterMultimapNmax 1 \
+        --alignIntronMin 1 \
+        --alignIntronMax 1200000 \
+        --outSAMattributes NH HI AS nM MD
+done
+
+# Paper 2
+names=("siRNA_CTRL_1"
+        "siRNA_CTRL_2"
+        "siRNA_KD1_1"
+        "siRNA_KD1_2"
+        "siRNA_KD2_1"
+        "siRNA_KD2_2")
+
+for ((i = 0; i < ${#names[@]}; i++)); do
+        file1="${names[i]}_1_val_1.fq.gz"
+        file2="${names[i]}_2_val_2.fq.gz"
+
+        STAR --runMode alignReads \
+        --runThreadN 4 \
+        --genomeDir /athena/angsd/scratch/wes4004/finalProj/hg38_150 \
+        --readFilesIn /athena/angsd/scratch/wes4004/finalProj/paper2/trimResults/"$file1" "$file2" \
+        --readFilesCommand zcat \
+        --outFileNamePrefix /athena/angsd/scratch/wes4004/finalProj/paper2/trimResults/STARalign/"${names[i]}." \
+        --outSAMtype BAM SortedByCoordinate \
+        --outFilterMultimapNmax 1 \
+        --alignIntronMin 1 \
+        --alignIntronMax 1200000 \
+        --outSAMattributes NH HI AS nM MD
+
+done
 ```
 
+### Index bam files
+```{bash index, eval=FALSE}
+for file in *.bam; do
+        samtools index "$file"
+done
+```
+
+## Alignment QC 
+
+### Running featureCounts
+```{bash featureCounts, eval=FALSE}
+# paper 1 genes
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p *.bam
+# paper 1 exons 
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p -f -O *.bam
+
+# paper 2 genes
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p *.bam
+# paper2 exons
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p -f -O *.bam
+```
+
+### Analyzing featureCounts results in R
 ```{r library, message=FALSE, warning=FALSE}
 library(ggplot2)
 library(dplyr)
@@ -99,234 +235,38 @@ plot2 <- ggplot(paper2, aes(x = Sample, y = Value, fill = Status)) +
    facet_grid(filter ~ .)
 plot2
 ```
-After running rseqc:  
-CRISPR_CTRL_1
-```
-Total Reads                   53010545
-Total Tags                    74116270
-Total Assigned Tags           70457395
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            54947231            1349.61           
-5'UTR_Exons         51591719            1537111             29.79             
-3'UTR_Exons         84703449            12300996            145.22            
-Introns             1692863637          1431855             0.85              
-TSS_up_1kb          32768518            12603               0.38              
-TSS_up_5kb          145105345           28299               0.20              
-TSS_up_10kb         257034069           135114              0.53              
-TES_down_1kb        35580148            36710               1.03              
-TES_down_5kb        152451362           83378               0.55              
-TES_down_10kb       264842866           105088              0.40              
-=====================================================================
-```
-CRISPR_CTRL_2
-```
-Total Reads                   54444657
-Total Tags                    75704188
-Total Assigned Tags           71939678
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            55506437            1363.35           
-5'UTR_Exons         51591719            1635196             31.69             
-3'UTR_Exons         84703449            12631353            149.12            
-Introns             1692863637          1947252             1.15              
-TSS_up_1kb          32768518            13746               0.42              
-TSS_up_5kb          145105345           30486               0.21              
-TSS_up_10kb         257034069           102688              0.40              
-TES_down_1kb        35580148            40729               1.14              
-TES_down_5kb        152451362           93850               0.62              
-TES_down_10kb       264842866           116752              0.44              
-=====================================================================
-```
-CRISPR_CTRL_3
-```
-Total Reads                   45824496
-Total Tags                    63720576
-Total Assigned Tags           60150294
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            45943802            1128.47           
-5'UTR_Exons         51591719            1321868             25.62             
-3'UTR_Exons         84703449            11548234            136.34            
-Introns             1692863637          1183081             0.70              
-TSS_up_1kb          32768518            10877               0.33              
-TSS_up_5kb          145105345           21764               0.15              
-TSS_up_10kb         257034069           52496               0.20              
-TES_down_1kb        35580148            35850               1.01              
-TES_down_5kb        152451362           82207               0.54              
-TES_down_10kb       264842866           100813              0.38              
-=====================================================================
-```
-CRISPR_KD_1
-```
-Total Reads                   59178839
-Total Tags                    80880021
-Total Assigned Tags           76795808
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            58152196            1428.33           
-5'UTR_Exons         51591719            1730411             33.54             
-3'UTR_Exons         84703449            14804348            174.78            
-Introns             1692863637          1910394             1.13              
-TSS_up_1kb          32768518            11933               0.36              
-TSS_up_5kb          145105345           24986               0.17              
-TSS_up_10kb         257034069           73104               0.28              
-TES_down_1kb        35580148            44584               1.25              
-TES_down_5kb        152451362           102061              0.67              
-TES_down_10kb       264842866           125355              0.47              
-=====================================================================
-```
-CRISPR_KD_2
-```
-Total Reads                   34273622
-Total Tags                    47880870
-Total Assigned Tags           45593330
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            35615293            874.78            
-5'UTR_Exons         51591719            1103834             21.40             
-3'UTR_Exons         84703449            7553030             89.17             
-Introns             1692863637          1185644             0.70              
-TSS_up_1kb          32768518            10532               0.32              
-TSS_up_5kb          145105345           21703               0.15              
-TSS_up_10kb         257034069           55367               0.22              
-TES_down_1kb        35580148            26901               0.76              
-TES_down_5kb        152451362           64705               0.42              
-TES_down_10kb       264842866           80162               0.30              
-=====================================================================
-```
-CRISPR_KD_3
-```
-Total Reads                   48327831
-Total Tags                    66492501
-Total Assigned Tags           63197510
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            48557522            1192.67           
-5'UTR_Exons         51591719            1490024             28.88             
-3'UTR_Exons         84703449            11149707            131.63            
-Introns             1692863637          1845084             1.09              
-TSS_up_1kb          32768518            9894                0.30              
-TSS_up_5kb          145105345           21631               0.15              
-TSS_up_10kb         257034069           44042               0.17              
-TES_down_1kb        35580148            37439               1.05              
-TES_down_5kb        152451362           89851               0.59              
-TES_down_10kb       264842866           111131              0.42              
-=====================================================================
 
+### Run QoRTs
+```{bash qorts, eval=FALSE}
+# paper 1
+for file in *.bam; do
+
+        filename=$(basename "$file")
+        filename_no_ext="${filename%%.*}"
+
+        qorts -Xmx40G QC \
+        --generatePlots \
+        --maxReadLength 101 \
+        --outfilePrefix "$filename_no_ext"_ \
+        $file /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf ./qortsResults
+done
+
+# paper 2
+for file in *.bam; do
+
+        filename=$(basename "$file")
+        filename_no_ext="${filename%%.*}"
+
+        qorts -Xmx40G QC \
+        --generatePlots \
+        --maxReadLength 150 \
+        --outfilePrefix "$filename_no_ext"_ \
+        $file /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf ./qortsResults
+done
 ```
 
-siRNA_CTRL_1:
-```
-Total Reads                   44653464
-Total Tags                    72006649
-Total Assigned Tags           68270106
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            53546725            1315.21           
-5'UTR_Exons         51591719            2360050             45.74             
-3'UTR_Exons         84703449            11271702            133.07            
-Introns             1692863637          960899              0.57              
-TSS_up_1kb          32768518            18377               0.56              
-TSS_up_5kb          145105345           30496               0.21              
-TSS_up_10kb         257034069           41374               0.16              
-TES_down_1kb        35580148            30007               0.84              
-TES_down_5kb        152451362           71420               0.47              
-TES_down_10kb       264842866           89356               0.34              
-=====================================================================
-```
-siRNA_CTRL_2
-```
-Total Reads                   53475983
-Total Tags                    87012521
-Total Assigned Tags           82491966
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            65672033            1613.03           
-5'UTR_Exons         51591719            2626197             50.90             
-3'UTR_Exons         84703449            12746359            150.48            
-Introns             1692863637          1305263             0.77              
-TSS_up_1kb          32768518            18393               0.56              
-TSS_up_5kb          145105345           31020               0.21              
-TSS_up_10kb         257034069           41237               0.16              
-TES_down_1kb        35580148            33930               0.95              
-TES_down_5kb        152451362           78150               0.51              
-TES_down_10kb       264842866           100877              0.38              
-=====================================================================
-```
-siRNA_KD1_1
-```
-Total Reads                   54369182
-Total Tags                    90744985
-Total Assigned Tags           86317762
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            70188989            1723.98           
-5'UTR_Exons         51591719            2984114             57.84             
-3'UTR_Exons         84703449            12264404            144.79            
-Introns             1692863637          772798              0.46              
-TSS_up_1kb          32768518            17117               0.52              
-TSS_up_5kb          145105345           24908               0.17              
-TSS_up_10kb         257034069           30286               0.12              
-TES_down_1kb        35580148            29221               0.82              
-TES_down_5kb        152451362           62176               0.41              
-TES_down_10kb       264842866           77171               0.29              
-=====================================================================
-```
-siRNA_KD1_2
-```
-Total Reads                   43475579
-Total Tags                    72421538
-Total Assigned Tags           68813934
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            55903613            1373.10           
-5'UTR_Exons         51591719            2245871             43.53             
-3'UTR_Exons         84703449            9630101             113.69            
-Introns             1692863637          940060              0.56              
-TSS_up_1kb          32768518            13362               0.41              
-TSS_up_5kb          145105345           21405               0.15              
-TSS_up_10kb         257034069           28157               0.11              
-TES_down_1kb        35580148            24190               0.68              
-TES_down_5kb        152451362           52576               0.34              
-TES_down_10kb       264842866           66132               0.25              
-=====================================================================
-```
-siRNA_KD2_1
-```
-Total Reads                   43164946
-Total Tags                    72349078
-Total Assigned Tags           68906585
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            56141081            1378.93           
-5'UTR_Exons         51591719            2537566             49.19             
-3'UTR_Exons         84703449            9312201             109.94            
-Introns             1692863637          807185              0.48              
-TSS_up_1kb          32768518            19173               0.59              
-TSS_up_5kb          145105345           30443               0.21              
-TSS_up_10kb         257034069           41858               0.16              
-TES_down_1kb        35580148            24295               0.68              
-TES_down_5kb        152451362           52399               0.34              
-TES_down_10kb       264842866           66694               0.25              
-=====================================================================
-```
-siRNA_KD2_2
-```
-Total Reads                   69672395
-Total Tags                    116889602
-Total Assigned Tags           110586194
-=====================================================================
-Group               Total_bases         Tag_count           Tags/Kb             
-CDS_Exons           40713380            91379159            2244.45           
-5'UTR_Exons         51591719            2995192             58.06             
-3'UTR_Exons         84703449            15186564            179.29            
-Introns             1692863637          876185              0.52              
-TSS_up_1kb          32768518            19055               0.58              
-TSS_up_5kb          145105345           32183               0.22              
-TSS_up_10kb         257034069           49114               0.19              
-TES_down_1kb        35580148            40328               1.13              
-TES_down_5kb        152451362           76278               0.50              
-TES_down_10kb       264842866           99980               0.38              
-=====================================================================
+### Running multiQC
+The resulting .html file is in the repository.
+```{bash multiqc, eval=FALSE}
+multiqc finalProj/
 ```
