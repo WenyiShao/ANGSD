@@ -164,14 +164,14 @@ done
 ### Running featureCounts
 ```{bash featureCounts, eval=FALSE}
 # paper 1 genes
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p *.bam
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_genes.txt -p *.bam
 # paper 1 exons 
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p -f -O *.bam
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_exons.txt -p -f -O *.bam
 
 # paper 2 genes
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p *.bam
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_genes.txt -p *.bam
 # paper2 exons
-featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p -f -O *.bam
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_exons.txt -p -f -O *.bam
 ```
 
 ### Analyzing featureCounts results in R
