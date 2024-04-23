@@ -18,13 +18,59 @@ knitr::opts_chunk$set(echo = TRUE)
 ### Load libraries
 ```{r library, message=FALSE, warning=FALSE}
 library(tidyverse)
-library(ggplot2); theme_set(theme_bw(base_size = 16))
+library(ggplot2); theme_set(theme_bw(base_size = 14))
 library(magrittr)
 library(DESeq2)
 library(tidySummarizedExperiment)
 options("restore_SummarizedExperiment_show" = TRUE)
+library(ashr)
 library(pheatmap)
+library(EnhancedVolcano)
 ```
+
+-------------------------------------------**EDIT**---------------------------------------------  
+featureCounts command is run as: 
+```{bash edit1, eval = FALSE}
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper1_counts.txt -p --countReadPairs -s 2 *.bam
+
+featureCounts -a /athena/angsd/scratch/wes4004/finalProj/hg38.ncbiRefSeq.gtf -g gene_id -o paper2_counts.txt -p --countReadPairs *.bam
+```
+
+trim-galore was not documented.
+```{bash edit2, eval = FALSE}
+# paper1
+pairs=(
+        "CRISPR_CTRL_1_1.fastq.gz" "CRISPR_CTRL_1_2.fastq.gz"
+        "CRISPR_CTRL_2_1.fastq.gz" "CRISPR_CTRL_2_2.fastq.gz"
+        "CRISPR_CTRL_3_1.fastq.gz" "CRISPR_CTRL_3_2.fastq.gz"
+        "CRISPR_KD_1_1.fastq.gz" "CRISPR_KD_1_2.fastq.gz"
+        "CRISPR_KD_2_1.fastq.gz" "CRISPR_KD_2_2.fastq.gz"
+        "CRISPR_KD_3_1.fastq.gz" "CRISPR_KD_3_2.fastq.gz"
+)
+
+for ((i = 0; i < ${#pairs[@]}; i+=2)); do
+        file1="${pairs[i]}"
+        file2="${pairs[i + 1]}"
+        trim_galore --illumina --length 2 --output_dir trimResults --paired "$file1" "$file2"
+done
+
+# paper2
+pairs=(
+        "siRNA_CTRL_1_1.fastq.gz" "siRNA_CTRL_1_2.fastq.gz"
+        "siRNA_CTRL_2_1.fastq.gz" "siRNA_CTRL_2_2.fastq.gz"
+        "siRNA_KD1_1_1.fastq.gz" "siRNA_KD1_1_2.fastq.gz"
+        "siRNA_KD1_2_1.fastq.gz" "siRNA_KD1_2_2.fastq.gz"
+        "siRNA_KD2_1_1.fastq.gz" "siRNA_KD2_1_2.fastq.gz"
+        "siRNA_KD2_2_1.fastq.gz" "siRNA_KD2_2_2.fastq.gz"
+)
+
+for ((i = 0; i < ${#pairs[@]}; i+=2)); do
+        file1="${pairs[i]}"
+        file2="${pairs[i + 1]}"
+        trim_galore --illumina --length 2 --output_dir trimResults --paired "$file1" "$file2"
+done
+```
+-------------------------------------------**EDIT**--------------------------------------------- 
 
 ### Load files
 ```{r files}
@@ -80,7 +126,7 @@ summarize(library_size=sum(counts), .groups='drop') %>%
 ggplot(aes(x=library_size, y=sizeFactor, color=condition)) +
 geom_point(size=3) +
 labs(x="Library size", y="Size factor", color = "Treatment") +
-    scale_color_manual(values = c("CRISPR_CTRL" = "#3182bd", "CRISPR_KD" = "#9ecae1", "siRNA_CTRL" = "#c51b8a", "siRNA_KD" = "#fa9fb5"))
+    scale_color_manual(values = c("CRISPR_CTRL" = "#3182bd", "CRISPR_KD" = "#9ecae1", "siRNA_CTRL" = "#c51b8a", "siRNA_KD" = "#fa9fb5")) + theme(text = element_text(size = 16))
 ```
 
 ### Normalize with VST
@@ -96,7 +142,8 @@ x="Mean", y="Standard deviation")
 dds_genes %>% 
   ggplot(aes(x=vst_norm_counts, group=.sample, color=condition)) + 
   geom_density() + 
-  labs(x="Log normalized counts", y="Density (genes)", color="Genotype")
+  labs(x="Log normalized counts", y="Density (genes)", color="Treatment") +
+    scale_color_manual(values = c("CRISPR_CTRL" = "#3182bd", "CRISPR_KD" = "#9ecae1", "siRNA_CTRL" = "#c51b8a", "siRNA_KD" = "#fa9fb5")) + theme(text = element_text(size = 16))
 ```
 
 ## Differential gene expression analysis
@@ -106,33 +153,83 @@ dds_genes %>%
 dds_genes$condition
 # This is comparing everything to CRISPR_CTRL
 dds_genes %<>% DESeq()
+
 rowData(dds_genes) %>% colnames
 rowData(dds_genes)$WaldPvalue_condition_siRNA_CTRL_vs_CRISPR_CTRL %>% hist(main = "siRNA_CTRL vs. CRISPR_CTRL", ylim = c(1, 10000))
 rowData(dds_genes)$WaldPvalue_condition_CRISPR_KD_vs_CRISPR_CTRL %>% hist(main = "CRISPR_KD vs. CRISPR CTRL")
-df_result_1 <- results(dds_genes, contrast = c("condition", "CRISPR_CTRL", "CRISPR_KD"), independentFiltering = TRUE, alpha = 0.05)
+
+
+df_result_1 <- results(dds_genes, contrast = c("condition", "CRISPR_CTRL", "CRISPR_KD"), independentFiltering = TRUE, alpha = 0.05, saveCols="Length")
 summary(df_result_1)
 table(df_result_1$padj < 0.05)
 
-df_result_2 <- results(dds_genes, contrast = c("condition", "CRISPR_CTRL", "siRNA_CTRL"), independentFiltering = TRUE, alpha = 0.05)
+df_result_2 <- results(dds_genes, contrast = c("condition", "CRISPR_CTRL", "siRNA_CTRL"), independentFiltering = TRUE, alpha = 0.05, saveCols="Length")
+summary(df_result_2)
+table(df_result_2$padj < 0.05)
+
+df_result_3 <- results(dds_genes, contrast = c("condition", "siRNA_CTRL", "siRNA_KD"), independentFiltering = TRUE, alpha = 0.05, saveCols="Length")
+summary(df_result_3)
+table(df_result_3$padj < 0.05)
 ```
 
 ```{r dgeAssess}
 df_result_1$padj %>% hist(main = "CRISPR_KD vs. CRISPR CTRL")
 df_result_2$padj %>% hist(main = "siRNA_CTRL vs. CRISPR_CTRL", ylim = c(1, 10000))
+df_result_3$padj %>% hist(main = "siRNA_CTRL vs. siRNA_KD")
+dds_genes_rownames <- rownames(dds_genes)
 
 df_result_1_sorted <- df_result_1 %>% `[`(order(.$padj),)
 head(df_result_1_sorted)
+df_result_2_sorted <- df_result_2 %>% `[`(order(.$padj),)
+head(df_result_2_sorted)
+df_result_3_sorted <- df_result_3 %>% `[`(order(.$padj),)
+head(df_result_3_sorted)
+
+
 plotCounts(dds_genes, gene = "ITGA6", normalized = TRUE, xlab = "")
+plotCounts(dds_genes, gene = "IGFBP4", normalized = TRUE, xlab = "")
+plotCounts(dds_genes, gene = "TULP3", normalized = TRUE, xlab = "")
 plotCounts(dds_genes, gene = "METTL3", normalized = TRUE, xlab = "")
 
-genes_dge <- rownames(subset(df_result_1_sorted, padj < 0.05))
-vst_genes <- dst_vst[genes_dge,] %>% assay
-pheatmap(vst_genes, scale="row",
-show_rownames=FALSE, main="DGE (row-based z-score)")
+genes_dge_1 <- rownames(subset(df_result_1_sorted, padj < 0.05))
+genes_dge_2 <- rownames(subset(df_result_2_sorted, padj < 0.05))
+genes_dge_3 <- rownames(subset(df_result_3_sorted, padj < 0.05))
+genes_dge <- unique(c(genes_dge_1, genes_dge_2, genes_dge_3))
 ```
 
-### Relevel
-In order to compare everything to siRNA_CTRL (e.g. compare siRNA_CTRL and siRNA_KD)
-```{r relevel}
-dds_genes$condition %<>% relevel(ref="siRNA_CTRL")
+```{r plots}
+vst_genes <- dst_vst[genes_dge,] %>% assay
+pheatmap(vst_genes, scale="row",
+show_rownames=FALSE, main="DEG (row-based z-score)", fontsize = 16)
+
+options(repr.plot.width = 6, repr.plot.height = 4)
+plotPCA(dst_vst) + labs(color=NULL) + theme(text = element_text(size = 20))
+```
+
+```{r volcano}
+resultsNames(dds_genes)
+# condition_CRISPR_KD_vs_CRISPR_CTRL
+df_result_1_shrunk <- lfcShrink(dds_genes, contrast = c("condition", "CRISPR_CTRL", "CRISPR_KD"), type="ashr")
+# condition_siRNA_CTRL_vs_CRISPR_CTRL
+df_result_2_shrunk <- lfcShrink(dds_genes, coef=3, type="ashr")
+
+df_result_3_shrunk <- lfcShrink(dds_genes, contrast = c("condition", "siRNA_CTRL", "siRNA_KD"), type="ashr")
+
+EnhancedVolcano(df_result_1_shrunk, lab=rownames(df_result_1_shrunk), x="log2FoldChange", y='padj', pCutoff = 0.05,
+title="CRISPR_CTRL vs CRISPR_KD with logFC shrinkage") + labs(x = "Log2FC(CRISPR_CTRL vs. CRISPR_KD)")
+
+EnhancedVolcano(df_result_2_shrunk, lab=rownames(df_result_2_shrunk),
+x='log2FoldChange', y='padj', pCutoff = 0.05,
+title="CRISPR_CTRL vs siRNA_CTRL with logFC shrinkage") + labs(x = "Log2FC(CRISPR_CTRL vs. siRNA_CTRL)") 
+
+EnhancedVolcano(df_result_3_shrunk, lab=rownames(df_result_3_shrunk),
+x='log2FoldChange', y='padj', pCutoff = 0.05,
+title="siRNA_CTRL vs siRNA_KD with logFC shrinkage") + labs(x = "Log2FC(siRNA_CTRL vs. siRNA_KD)")
+```
+
+```{r save, eval=FALSE}
+# Remove parts that will not be used in downstream analysis
+rm(df_result_3_sorted, df_result_2_sorted, df_result_1_sorted, df_result_1_shrunk, df_result_2_shrunk)
+# Save
+save.image(file = "Project.RData")
 ```
