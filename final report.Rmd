@@ -1,0 +1,109 @@
+---
+title: "Comparison of CRISPR-Cas9 and siRNA Knockdown of METTL3 gene on Overall Gene Expression in MCF-10A cells
+  in MCF-10A Cells"
+author: "Wenyi Shao"
+date: "`r Sys.Date()`"
+output:
+  html_document: 
+    toc: true
+    fig_width: 6
+    fig_height: 4
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+RNA modifications can have a range of effects on the RNA, which decides RNA fate, and aberrant regulations of such regulations could lead to diseases. N6-methyladenosine (m6A) is the most abundant RNA modification [1]. The multicomponent m6A methyltransferase complex (MTC) is one of the common “writer” proteins of m6A, and one of the key components of MTC is METTL3. As METTL3 dysregulation frequently occurs in cancer, it has been studied as a potential target of cancer treatments. In breast cancer, the change in METTL3 expression may either lead to an increase or decrease in cancer progression [2]. Common knockdown methods of the METTL3 gene include the use of CRISPR-Cas9, shRNA and siRNA [3]. It is not yet known if different knockdown methods could lead to significant differences in gene expression in breast cancer cells. It is hypothesized that such differences exist. In this report, two next-generation sequencing (NGS) datasets obtained from METTL3 knockdown experiments are compared. Both publications use a spontaneously immortalized, nontumorigenic control breast cancer cell lines, MCF-10A, as part of their studies. One study uses CRISPR-Cas9 [4] to knockdown METTL3 and the other uses siRNA [5]. Results show that siRNA knockdown assays may have higher efficiency and cause less change in overall gene expression. In addition, the same cell line from different sources could have a larger impact on gene expression than the knockdown assay itself. These results provide insight into different gene knockdown methods and the differences that could exist between the same cell lines.
+
+### Results
+The raw reads from both datasets have comparable quality scores (> 30) and sequence counts. When aligned to the NCBI RefSeq GRCh38 genome, both datasets show similar mapping location and the number of reads that can be assigned to the genome. The CRISPR-Cas9 dataset uses stranded library preparation and has a 100 bp read length, while the siRNA dataset uses unstranded library preparation and has a 150 bp read length. Both of these differences are verified during quality control.  Fewer splice events are detected from the CRISPR-Cas9 reads compared to the siRNA reads (Fig. 1), which could be due to the difference in read lengths [6].  
+<center>
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig1.png)
+
+</center> 
+**Figure 1.** Number of splice events detected.  
+
+The data is normalized with Variance Stabilizing Transformation (VST) in the Differential Expression analysis of Sequencing data package. Both datasets have a large number of low-expression genes, which show as a large peak after normalization (Fig. 2).
+<center>
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig2.png)  
+
+</center>
+**Figure 2.** VST normalized counts of the datasets.
+
+After normalization, significant p-values filtered using Independent Hypothesis Weighting at α = 0.05 are obtained, and the frequencies are reported in Table 1. It can be seen that the CRISPR method leads to a much larger change in overall gene expression in the cell, while the siRNA method only leads to a minimal effect. It should be noted that the greatest discrepancy is found between the two control cell lines, with almost 8,000 genes differentially expressed. A similar trend is shown in the PCA plot, the cell line explains 94% of the gene expression difference, and the CRISPR knockdown sets the treated cells farther apart from the controls (Fig. 3).
+
+**Table 1.** Number of significant differentially   expressed genes.
+
+| Comparison |Significant |Not significant |
+|:------------|:-------------|:-----------------|
+| CRISPR_CTRL vs. CRISPR_KD | 835 | 16385    |
+| siRNA_CTRL vs. siRNA_KD   |  4  | 32211    |
+| CRISPR_CTRL vs. siRNA_CTRL| 7953 | 12390   |
+
+<center>
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig3.png)  
+</center> 
+**Figure 3.** PCA plot of all groups
+
+Interestingly, the normalized gene expression count of METTL3 is not significantly different for any of the groups. For the two control cell lines, the adjusted p-value is 0.50. In the CRISPR knockdown treatment, there is no visible decrease (Fig. 4), and the adjusted p-value is 0.83. For the siRNA knockdown, although there is a visible decrease in METTL3 expression, the adjusted p-value is 0.21, which does not pass the 0.05 significance threshold. It should be noted that before adjustion, the p-value for the siRNA knockdown is 5.3e-5.
+
+<center>
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig4.png) 
+
+
+</center> 
+**Figure 4.** METTL3 expression in all groups.
+
+As the number of differentially expressed genes (DEG) for siRNA control and knockdown groups are small, downstream analysis only concerns the differences between the two cell lines and the effect of the CRISPR treatment. Gene Set Enrichment Analysis (GSEA) reveals the enriched pathways under different experimental conditions. For the two CRISPR treatments, a number of pathways related to cell immune response, especially virus, are found (Fig. 5a). For the two cell lines, the major differences are involved in cell maintenance and differentiation pathways (Fig. 5b).  
+
+**a.** 
+<center>
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig5a.png) 
+</center> 
+**b.**
+<center> 
+![](C:/Users/hwenn/OneDrive/Desktop/邵文奕/学校/angsd/final project/fig5b.png)
+
+</center> 
+**Figure 5a - b.** GSEA results. **a.** CRISPR control versus CRISPR knockdown. **b.** CRISPR control versus siRNA control cell lines.
+
+### Methods
+The RefSeq GRCh38 genome and .bed files are downloaded from UCSC Genome Browser and UCSC Table Browser. The data from the CRISPR knockdown study is downloaded from NCBI, and the data from the siRNA knockdown study is downloaded from BioStudies. _FastQC_ is run on the raw reads to compare the dataset quality. Index is generated with _STAR_ for both studies, with an _-sjdbOverhang_ of 99 for the CRISPR paper and 149 for the second paper, since the first paper has a read length of 100 and the second 150. _Trim Galore_ is run on all the .fastq files with  _--length 2_ to increase the length threshold of filtering and discard reads under two base pairs after trimming. During STAR alignment, the minimum and maximum intron length for the alignments is determined from the maximum and minimum introns in .bed file. A minimum of length 1 and a maximum length of 1,200,000 are used in the alignments. The multi-mapping reads are set to 1 to minimize ambiguity. Reads from datasets are paired-end, so the alignments are generated as paired-end. The resulting .bam files are indexed with _samtools_. 
+Alignment distrubution is analyzed with _featureCounts_. The .bed file does not have Ensembl ID or Enterez ID, so Gene ID is used. The _-p_ and _--countReadPairs_ flags are also used, as both papers have paired-end read. _-s 2_ was used for the CRISPR study, as the majority of the reads are mapped to the opposite strand as the gene feature.  _QoRTs_ is run to generate the overall quality metrics. Finally, the QC report files are compiled and visualized with _MultiQC_. (For details, see the Milestone 2 files.)  
+
+The differential gene expression analysis is carried out in R through _DESeq_. Genes with zero counts are filtered out. For each count file, the size factor for each read count is plotted against library size to ensure there is a general trend of larger library size corresponding to a larger size factor. The reads are normalized with VST. A mean-and-standard-deviation plot and a density-versus-log$_2$-normalized-count plot are generated to ensure normalization worked. Gene-wise dispersion estimates is calculated across all samples with the _estimateDispersions()_ function in the _DESeq_ package. A negative binomial generalized linear model (GLM) is used to model the data and Wald statistic is calculated for each gene p-values are normalized with the _nbinomWaldTest()_ function. The resulting p-values for each comparison (CRISPR control versus CRISPR knockdown, CRISPR control versus siRNA control, siRNA control versus siRNA knockdown) are adjusted with Independent Hypothesis Weighting, and a significance level of α = 0.05 is used. The p-values are sorted and used to generate a differentially expressed gene (DEG) plot with the _pheatmap_ package. The DEG are also used to generate a PCA plot with the _plotPCA()_ function. The _lfcshrink()_ function and the _ashr_ package are used to calculate the log-fold changes for gene expression. The resulting data from the CRISPR control versus CRISPR knockdown and CRISPR control versus siRNA control is used to generate volcano plots with the _EnhancedVolcano_ package. Only the PCA plot is reported, as it is the most representative of the differences between the experimental groups. (For details, see the Milestone 3 files.)  
+
+To analyze gene ontology and pathway analysis are conducted with the _org.Hs.eg.db_ package as the annotation reference. The significant, ordered genes are used in the _enrichGO_ and _gseGO_ (from the _clusterProfiler_ package). For these analyses, the _maxGSSsize_ is set to 800 and _minGSSsize_ is set to 3 for reasonably sized gene sets. Benjamini-Hochberg correction for p-values is used. The enriched gene ontologies are analyzed and visualized in REVIGO. The enriched gene sets are visualized with the _DOSE_ package. The dotplots of the enriched gene sets are the most informative and are included in this report. (For details, see the Milestone 4 files.)  
+
+Other R packages that are used to assist data analysis and visualization include: _tidyverse_, _ggplot2_, _magrittr_, _AnnotationDbi_ and _tidySummarizedExperiment_.
+
+
+### Discussion
+METTL3 has been studied as a potential target for breast cancer treatment. It has been shown that METTL3 knockdown may slow the progression of breast cancer [4, 5]. Multiple knockdown methods exist, and it is crucial to select for knockdowns that are highly efficient for the target gene and minimize off-target effects. Results from this report that siRNA may be a better knockdown method for METTL3, as it leads to a stronger knockdown effect and has little impact on the expression of other genes. However, it should be noted that a less noticeable difference between the gene expression may still lead to a decrease in the expression of METTL3 protein in the knockdown assays compared to the control. In addition, since the two datasets are generated from two different experiments, the experiments conducted to transduce these METTL3 knockdown cells may also change gene expression. It is also interesting that despite the two studies using the same breast cancer cell line, MCF-10A, the control cells show almost 8,000 differentially expressed genes. This exceeds the gene expression difference between the control and knockdown assays. This result could be due to the source of the MCF-10A cells, as one study is conducted in a U.S.-based lab, while the other lab is based in Sweden. It is thus important to choose an optimal method in gene knockdown experiments and take into consideration of the differences that might exists between the same cell lines during downstream analysis. 
+
+### Table of kept data
+This is a table for the data that were used to generate the figures in this report.  
+
+| Dataset | Content |
+|:---|:---|
+| cts_genes  |  concatenated count file of two papers |
+| dds_genes  |  DESeq object |
+| dst_vst  |  VST normalized gene counts |
+| df_result_1 | p-value CRISPR control versus CRISPR knockdown |
+| df_result_2 | p-value CRISPR control versus siRNA control  |
+| df_result_3  | p-value siRNA control versus siRNA knockdown |
+| gene_list_1 | GSEA dataset CRISPR control versus CRISPR knockdown |
+| gene_list_2 | GSEA dataset CRISPR control versus siRNA control |
+
+
+### Citation
+1.	Zeng, C., Huang, W., Li, Y. et al. Roles of METTL3 in cancer: mechanisms and therapeutic targeting. _J Hematol Oncol_ 13, 117 (2020). https://doi.org/10.1186/s13045-020-00951-w
+2.	Huang, J., Chen, Z., Chen, X., Chen, J., Cheng, Z., & Wang, Z. (2021). The role of RNA N6-methyladenosine methyltransferase in cancers. _Molecular Therapy - Nucleic Acids_, 23, 887–896. https://doi.org/10.1016/j.omtn.2020.12.021
+3.	Behlke, K. A. L. and M. A. (2016). Mini-review on current strategies to knockdown long non-coding RNAs. _Journal of Rare Diseases Research & Treatment_, 1(3). https://www.rarediseasesjournal.com/articles/minireview-on-current-strategies-to-knockdown-long-noncoding-rnas.html
+4.	Dorgham, M. G., Elliott, B. A., Holley, C. L., & Mansfield, K. D. (2023). m6A regulates breast cancer proliferation and migration through stage-dependent changes in Epithelial to Mesenchymal Transition gene expression. _Frontiers in Oncology_, 13, 1268977. https://doi.org/10.3389/fonc.2023.1268977 
+5.	Achour, C., Bhattarai, D. P., Groza, P., Román, Á.-C., & Aguilo, F. (2023). METTL3 regulates breast cancer-associated alternative splicing switches. _Oncogene_, 42(12), 911–925. https://doi.org/10.1038/s41388-023-02602-z
+6.	Chhangawala, S., Rudy, G., Mason, C. E., & Rosenfeld, J. A. (2015). The impact of read length on quantification of differentially expressed genes and splice junction detection. _Genome Biology_, 16(1), 131. https://doi.org/10.1186/s13059-015-0697-y
